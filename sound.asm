@@ -1,44 +1,75 @@
 section .data
-    ; Define frequency and duration of the sound
-    frequency equ 440
-    duration equ 200
+    freq    dd  440
+
+section .bss
+    count   resw    1
 
 section .text
     global _start
 
 _start:
-    ; Enable the PC speaker
-    mov al, 0b10110000
+    ; Get the frequency from memory
+    mov eax, [freq]
+
+    ; Set up the sound
+    mov al, 0xB6
     out 0x43, al
 
-    ; Calculate the frequency divisor and send it to the speaker
-    mov eax, 1193180
-    mov ebx, eax
-    mov al, byte 0
-    mov ah, byte 0
-    mov dx, frequency
-    div dx
+    ; Split the frequency into high and low bytes
+    movzx bx, al
+    mov bl, 0
+    mov cx, 1193180
+    div cx
+    mov [count], ax
+
+    ; Send the low byte to port 0x42
     mov al, bl
     out 0x42, al
-    mov al, ah
+
+    ; Send the high byte to port 0x42
+    mov al, bh
     out 0x42, al
 
-    ; Wait for the duration of the sound
-    mov ecx, duration
-    mov eax, 119318
+    ; Play the sound for 1 second
+    mov ecx, [count]
+    mov eax, 1000000
     mul ecx
     mov ecx, eax
-    mov eax, edx
-    xor edx, edx
-    mov ebx, 1000
-    div ebx
-    mov ecx, eax
-    mov eax, 1
-    int 0x80
+    call usleep
 
-    ; Disable the PC speaker and exit
+    ; Stop the sound
     mov al, 0
-    out 0x61, al
+    out 0x42, al
+
+    ; Exit the program
     mov eax, 1
     xor ebx, ebx
     int 0x80
+
+usleep:
+    push ebp
+    mov ebp, esp
+
+    ; Get the arguments from the stack
+    mov eax, [ebp+8]
+    mov edx, [ebp+12]
+
+    ; Calculate the time to sleep
+    mov ebx, 1000000
+    div ebx
+
+    ; Loop and wait
+    push ecx
+    push edx
+    mov ecx, eax
+    mov edx, ebx
+    mov eax, 0x0
+    int 0x80
+    pop edx
+    pop ecx
+
+    ; Restore the stack and return
+    mov esp, ebp
+    pop ebp
+    ret
+
